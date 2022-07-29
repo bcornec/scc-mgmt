@@ -8,14 +8,18 @@ use DateTime::Format::RFC3339;
 use DateTime::Format::Strptime;
 use DateTime::Format::Duration;
 use API::Google::GCal;
+use utf8;
+use open qw(:std :utf8);
+use Encode;
+use Encode::Guess;
 
 #### ADAPTATION ZONE 
 my $user = 'eurolinux@gmail.com';
-my $calendar_id = '08ulfn9rcjdl3c5spj12n6cvk4@group.calendar.google.com';
-my $calendar_name = "TEST";
 my $timezone = 'Europe/Paris';
 # TBC
 my $spreadsheet = "1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME";
+# Start in check mode, and pass it to 0 once verified
+my $check = 0;
 #### END ZONE
 
 #Avoids warnings
@@ -30,57 +34,57 @@ STDOUT->autoflush(1);
 
 ### GOOGLE Read NOT WORKING for now ###
 # Use google_restapi_session_creator to create token with config.yaml from Google console
-use Google::RestApi;
+#use Google::RestApi;
 
-print "Step 1\n";
-my $rest_api = Google::RestApi->new( config_file   => "config.yaml");
+#print "Step 1\n";
+#my $rest_api = Google::RestApi->new( config_file   => "config.yaml");
 # content seems OK
 #print "RA: ".Dumper($rest_api)."\n";
  
-print "Step 2\n";
-use Google::RestApi::SheetsApi4;
-print "Step 3\n";
-my $sheets_api = Google::RestApi::SheetsApi4->new(api => $rest_api);
-print "SA: ".Dumper($sheets_api)."\n";
-print "Step 4\n";
+#print "Step 2\n";
+#use Google::RestApi::SheetsApi4;
+#print "Step 3\n";
+#my $sheets_api = Google::RestApi::SheetsApi4->new(api => $rest_api);
+#print "SA: ".Dumper($sheets_api)."\n";
+#print "Step 4\n";
 #my $sheet = $sheets_api->open_spreadsheet(title => "Sélection SCC 22/23");
 ##/edit#gid=968175567
-my $sheet = $sheets_api->open_spreadsheet(id => $spreadsheet);
-print "SH: ".Dumper($sheet)."\n";
-print "Step 5\n";
+#my $sheet = $sheets_api->open_spreadsheet(id => $spreadsheet);
+#print "SH: ".Dumper($sheet)."\n";
+#print "Step 5\n";
 # Doesn't work
 #my $ws0 = $sheet->open_worksheet(id => "968175567");
-my $ws0 = $sheet->open_worksheet(name => "2022-2023");
-print "WS ".Dumper($ws0)."\n";
+#my $ws0 = $sheet->open_worksheet(name => "2022-2023");
+#print "WS ".Dumper($ws0)."\n";
 ## doesn't work
 #my $ws0 = $sheet->open_worksheet(id => 1);
 #print "Found WS0 ".Dumper($ws0)."\n";
 
-print "Step 6\n";
-my $rc = "E2";
-my $cell = $ws0->range_cell($rc);
-print "CELL ".Dumper($ws0)."\n";
-print "Step 6-2\n";
+#print "Step 6\n";
+#my $rc = "E2";
+#my $cell = $ws0->range_cell($rc);
+#print "CELL ".Dumper($ws0)."\n";
+#print "Step 6-2\n";
 # Doesn't work
 #my $ws0id = $cell->worksheet_id();
 #print "WS ID : $ws0id\n";
-print "Step 6-3\n";
-my $ssid = $cell->spreadsheet_id();
-print "WS ID : $ssid\n";
-print "Step 6-4\n";
-print "Found $rc ".Dumper($cell)."\n";
-print "Step 6-5\n";
+#print "Step 6-3\n";
+#my $ssid = $cell->spreadsheet_id();
+#print "WS ID : $ssid\n";
+#print "Step 6-4\n";
+#print "Found $rc ".Dumper($cell)."\n";
+#print "Step 6-5\n";
 #print "Values:\n".Dumper($cell->values())."\n";
 
-print "Step 6-6\n";
+#print "Step 6-6\n";
 #my $vals = $ws0->rows([1, 2, 3]);
 #print "Vals ".Dumper($vals)."\n";
 
-print "Step 7\n";
+#print "Step 7\n";
 #my $cols = $ws0->tie_cols('SPECTACLE', 'PRECISION', 'SALLES');
 #print "Cols: $cols->{SPECTACLE} -> $cols->{SALLES}\n";
 
-print "Step 8\n";
+#print "Step 8\n";
 #my $values = $ws0->rows([2, 3, 4]);
 #foreach my $v ($values) {
 #print Dumper($v);
@@ -116,6 +120,9 @@ my $scctype;
 my $worksheet;
 my $salles;
 my %fields;
+my $calendar_id;
+my $calendar_only_id;
+#my $calendar_name;
 
 # Detect SSC type : ICE or Perso
 foreach my $t (@tables) {
@@ -131,6 +138,10 @@ foreach my $t (@tables) {
 		$fields{'start'} = "G";
 		$fields{'date'} = "H";
 		$fields{'salle'} = "J";
+		# SPectacles Auto
+		$calendar_id = 'djh6o0scv3sqebaneb2849s9j4@group.calendar.google.com';
+		# TEST
+		#$calendar_id = '08ulfn9rcjdl3c5spj12n6cvk4@group.calendar.google.com';
 	} elsif ($t->get_name =~ /2022-2023/)  {
 		# ICE
 		$scctype = "ICE";
@@ -144,16 +155,27 @@ foreach my $t (@tables) {
 		$fields{'date'} = "R";
 		$fields{'salle'} = "G";
 		$fields{'dateinsc'} = "S";
+		$fields{'cat'} = "A";
+		$fields{'style'} = "B";
+		$fields{'options'} = "U";
+		$fields{'url'} = "AC";
+		$fields{'text'} = "AD";
+		$fields{'choix'} = "K";
+		$calendar_id = '228v2ibpe7hggi0rdb13n2drk8@group.calendar.google.com';
+		$calendar_only_id = '069oro5hmku3vou5hjafdj66a0@group.calendar.google.com';
+		#my $calendar_name = "SCC";
 	}
 }
 print "Found spreadhseet of type $scctype\n" if (defined $scctype);
 
 # Capture all scc
+print "Analyzing it ...\n" if (defined $scctype);
 my $scc = $odf->get_body->get_table($worksheet);
 
 my $i = 1;
 my $c;
 my $end = 0;
+my $cell;
 while ($end eq 0) {
 	foreach my $k (keys %fields) {
 		$cell = $scc->get_cell($i, $fields{$k});
@@ -164,6 +186,8 @@ while ($end eq 0) {
 	}
 	# Manages lack of minuts
 	$cal{$i}{'duration'} .= "0" if ((defined $cal{$i}{'duration'}) and ($cal{$i}{'duration'} =~ /h$/));
+	# Skipping Choices 2+ for SCC
+	delete($cal{$i}) if (($scctype eq "ICE") and ($cal{$i}{'choix'} !~ /1/));
 	$i++;
 }
 # The previous one is void delete it
@@ -171,11 +195,13 @@ $i--;
 delete($cal{$i});
 #print "Calendar :\n";
 #print Dumper(%cal);
+print "... Done.\n" if (defined $scctype);
 
 #
 # This GOOGLE API works for calendar !
 #
 print "Step 0\n";
+# Use goauth ofr that
 my $gapi = API::Google::GCal->new({ tokensfile => 'config.json' });
 
 
@@ -187,17 +213,23 @@ $gapi->refresh_access_token_silent($user); # inherits from API::Google
 #print "Step 3\n";
 #$gapi->get_calendars($user, ['id', 'summary']);  # return only specified fields
 
-print "Step 2\n";
-$gapi->get_calendar_id_by_name($user, $calendar_name);
+#print "Step 2\n";
+#$gapi->get_calendar_id_by_name($user, $calendar_name);
 
 my ($dateparser,$dateparserend,$duration,$event_start,$event_end);
 
 my $j = 0;
 foreach my $i (sort keys %cal) {
-	print Dumper($cal{$i});
-	$event->{description} = "$cal{$i}->{spectacle}\n$cal{$i}->{detail}\n";
-	$event->{summary} = "$cal{$i}->{spectacle}";
-	$event->{location} = "$cal{$i}->{salle}";
+	#print Dumper($cal{$i});
+	$event->{description} = "$cal{$i}->{spectacle}\n\n$cal{$i}->{detail}\n";
+	$event->{description} .= "Catégorie: $cal{$i}->{cat}\n" if (defined $cal{$i}->{cat});
+	$event->{description} .= "Style $cal{$i}->{style}\n" if (defined $cal{$i}->{style});
+	$event->{description} .= "Détails: $cal{$i}->{text}\n" if (defined $cal{$i}->{text});
+	$event->{description} .= "URL $cal{$i}->{url}\n" if (defined $cal{$i}->{url});
+	$event->{description} .= "Nb options $cal{$i}->{options}\n" if (defined $cal{$i}->{options});
+	$event->{description} = decode("Guess", $event->{description});
+	$event->{summary} = decode("Guess","$cal{$i}->{spectacle}");
+	$event->{location} = decode("Guess","$cal{$i}->{salle}");
 	if ($scctype eq "Perso") {
 		$dateparser = DateTime::Format::Strptime->new( 
 			pattern => '%d/%m/%Y %Hh%M',
@@ -212,6 +244,7 @@ foreach my $i (sort keys %cal) {
 			on_error => 'croak',
 		);
 	}
+	# This is for the event itself
 	$event_start = $dateparser->parse_datetime($cal{$i}->{date}." ".$cal{$i}->{start});
 	$event_end = $dateparser->parse_datetime($cal{$i}->{date}." ".$cal{$i}->{start});
 	$event->{start}{timeZone} = $timezone;
@@ -227,6 +260,42 @@ foreach my $i (sort keys %cal) {
 
 	$j++;
 	print "Add event #$j $cal{$i}->{spectacle}\n";
-	print Dumper($event);
-	$gapi->add_event($user, $calendar_id, $event);
+	#print Dumper($event);
+	$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+	$gapi->add_event($user, $calendar_only_id, $event) if ($check eq 0);
+	# For SCC we also need reminders for options, sending confirmation, and invoice
+	if ($scctype eq "ICE") {
+		# First manages options at the planned date
+		$event->{summary} = decode("Guess","Rendu d'options pour $cal{$i}->{spectacle}");
+		$event_start = $dateparser->parse_datetime($cal{$i}->{dateinsc}." 18h00");
+		$event->{start}{timeZone} = $timezone;
+		$event->{start}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_start);
+		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
+		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
+		print "Add reminder option event #$j $cal{$i}->{spectacle}\n";
+		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+
+		# Then manages participant communication one week before date
+		$event->{summary} = decode("Guess","Participants pour $cal{$i}->{spectacle}");
+		$event_start = $dateparser->parse_datetime($cal{$i}->{date}." 18h00");
+		$event_start = $event_start + DateTime::Duration->new( weeks => -1 );
+		$event->{start}{timeZone} = $timezone;
+		$event->{start}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_start);
+		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
+		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
+		print "Add participant option event #$j $cal{$i}->{spectacle}\n";
+		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+		
+		# Then manages participants invoice one week after
+		$event->{summary} = decode("Guess","Facture participants pour $cal{$i}->{spectacle}");
+		$event_start = $dateparser->parse_datetime($cal{$i}->{date}." 18h00");
+		$event_start = $event_start + DateTime::Duration->new( weeks => 1 );
+		$event->{start}{timeZone} = $timezone;
+		$event->{start}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_start);
+		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
+		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
+		print "Add participant invoice option event #$j $cal{$i}->{spectacle}\n";
+		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+	}
+
 }
