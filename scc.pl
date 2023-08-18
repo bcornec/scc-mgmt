@@ -124,6 +124,16 @@ my $calendar_id;
 my $calendar_only_id;
 #my $calendar_name;
 
+#
+# This GOOGLE API works for calendar !
+#
+print "Step 0\n";
+# Use goauth for that
+my $gapi = API::Google::GCal->new({ tokensfile => 'config.json' });
+
+print "Step 1\n";
+$gapi->refresh_access_token_silent($user); # inherits from API::Google
+
 # Detect SSC type : ICE or Perso
 foreach my $t (@tables) {
 	if ($t->get_name =~ /Spectacles/) {
@@ -138,11 +148,13 @@ foreach my $t (@tables) {
 		$fields{'start'} = "G";
 		$fields{'date'} = "H";
 		$fields{'salle'} = "J";
-		# SPectacles Auto
-		$calendar_id = 'djh6o0scv3sqebaneb2849s9j4@group.calendar.google.com';
+		# Spectacles Auto
+		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SpectaclesAuto');
 		# TEST
-		#$calendar_id = '08ulfn9rcjdl3c5spj12n6cvk4@group.calendar.google.com';
-	} elsif ($t->get_name =~ /2022-2023/)  {
+		#$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
+		last;
+	} 
+	if ($t->get_name =~ /202.*/)  {
 		# ICE
 		$scctype = "ICE";
 		$worksheet = $t->get_name;
@@ -158,12 +170,14 @@ foreach my $t (@tables) {
 		$fields{'cat'} = "A";
 		$fields{'style'} = "B";
 		$fields{'options'} = "U";
-		$fields{'url'} = "AC";
-		$fields{'text'} = "AD";
+		$fields{'url'} = "AE";
+		$fields{'text'} = "AF";
 		$fields{'choix'} = "K";
-		$calendar_id = '228v2ibpe7hggi0rdb13n2drk8@group.calendar.google.com';
-		$calendar_only_id = '069oro5hmku3vou5hjafdj66a0@group.calendar.google.com';
-		#my $calendar_name = "SCC";
+		# SCC
+		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SCC');
+		# Coups de Cœur
+		$calendar_only_id = $gapi->get_calendar_id_by_name($user, 'Coups de Cœur');
+		last;
 	}
 }
 print "Found spreadhseet of type $scctype\n" if (defined $scctype);
@@ -196,25 +210,6 @@ delete($cal{$i});
 #print "Calendar :\n";
 #print Dumper(%cal);
 print "... Done.\n" if (defined $scctype);
-
-#
-# This GOOGLE API works for calendar !
-#
-print "Step 0\n";
-# Use goauth ofr that
-my $gapi = API::Google::GCal->new({ tokensfile => 'config.json' });
-
-
-print "Step 1\n";
-$gapi->refresh_access_token_silent($user); # inherits from API::Google
-
-#print "Step 2\n";
-#$gapi->get_calendars($user);
-#print "Step 3\n";
-#$gapi->get_calendars($user, ['id', 'summary']);  # return only specified fields
-
-#print "Step 2\n";
-#$gapi->get_calendar_id_by_name($user, $calendar_name);
 
 my ($dateparser,$dateparserend,$duration,$event_start,$event_end);
 
@@ -259,12 +254,12 @@ foreach my $i (sort keys %cal) {
 	$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
 
 	$j++;
-	print "Add event #$j $cal{$i}->{spectacle}\n";
+	print "Add event #$j $cal{$i}->{spectacle} - $event->{start}{dateTime}\n";
 	#print Dumper($event);
 	$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
-	$gapi->add_event($user, $calendar_only_id, $event) if ($check eq 0);
 	# For SCC we also need reminders for options, sending confirmation, and invoice
 	if ($scctype eq "ICE") {
+		$gapi->add_event($user, $calendar_only_id, $event) if ($check eq 0);
 		# First manages options at the planned date
 		$event->{summary} = decode("Guess","Rendu d'options pour $cal{$i}->{spectacle}");
 		$event_start = $dateparser->parse_datetime($cal{$i}->{dateinsc}." 18h00");
