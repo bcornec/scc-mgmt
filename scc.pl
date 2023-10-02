@@ -173,6 +173,9 @@ foreach my $t (@tables) {
 		$fields{'url'} = "AE";
 		$fields{'text'} = "AF";
 		$fields{'choix'} = "K";
+		# TEST
+		#$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
+		#$calendar_only_id = $calendar_id;
 		# SCC
 		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SCC');
 		# Coups de Cœur
@@ -181,6 +184,12 @@ foreach my $t (@tables) {
 	}
 }
 print "Found spreadhseet of type $scctype\n" if (defined $scctype);
+if (defined $calendar_id) {
+	print "Will populate calendar $calendar_id\n";
+} else {
+	print "Use goauth to re-enable Google Calendar connection\n";
+    exit(-1);
+}
 
 # Capture all scc
 print "Analyzing it ...\n" if (defined $scctype);
@@ -198,7 +207,7 @@ while ($end eq 0) {
 		$end = 1 if ((not defined $c) || ($c eq "") and ($k =~ /spectacle/));
 		$cal{$i}->{$k} = $cell->get_text();
 	}
-	# Manages lack of minuts
+	# Manages lack of minutes
 	$cal{$i}{'duration'} .= "0" if ((defined $cal{$i}{'duration'}) and ($cal{$i}{'duration'} =~ /h$/));
 	# Skipping Choices 2+ for SCC
 	delete($cal{$i}) if (($scctype eq "ICE") and ($cal{$i}{'choix'} !~ /1/));
