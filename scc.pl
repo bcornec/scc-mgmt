@@ -129,7 +129,8 @@ my $calendar_only_id;
 #
 print "Step 0\n";
 # Use goauth for that
-my $gapi = API::Google::GCal->new({ tokensfile => 'config.json' });
+my $jsonf = "$ENV{'HOME'}/prj/scc-mgmt/config.json";
+my $gapi = API::Google::GCal->new({ tokensfile => $jsonf });
 
 print "Step 1\n";
 $gapi->refresh_access_token_silent($user); # inherits from API::Google
@@ -148,6 +149,7 @@ foreach my $t (@tables) {
 		$fields{'start'} = "G";
 		$fields{'date'} = "H";
 		$fields{'salle'} = "J";
+		$fields{'type'} = "O";
 		# Spectacles Auto
 		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SpectaclesAuto');
 		# TEST
@@ -188,6 +190,7 @@ if (defined $calendar_id) {
 	print "Will populate calendar $calendar_id\n";
 } else {
 	print "Use goauth to re-enable Google Calendar connection\n";
+	print "and use the resulting JSON content to modify $jsonf\n";
     exit(-1);
 }
 
@@ -231,6 +234,7 @@ foreach my $i (sort keys %cal) {
 	$event->{description} .= "Détails: $cal{$i}->{text}\n" if (defined $cal{$i}->{text});
 	$event->{description} .= "URL $cal{$i}->{url}\n" if (defined $cal{$i}->{url});
 	$event->{description} .= "Nb options $cal{$i}->{options}\n" if (defined $cal{$i}->{options});
+	$event->{description} .= "Type: $cal{$i}->{type}\n" if (defined $cal{$i}->{type});
 	$event->{description} = decode("Guess", $event->{description});
 	$event->{summary} = decode("Guess","$cal{$i}->{spectacle}");
 	$event->{location} = decode("Guess","$cal{$i}->{salle}");
