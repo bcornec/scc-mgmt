@@ -16,11 +16,11 @@ use Encode::Guess;
 #### ADAPTATION ZONE 
 my $user = 'eurolinux@gmail.com';
 my $timezone = 'Europe/Paris';
-# TBC
-my $spreadsheet = "1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME";
-# Start in check mode, and pass it to 0 once verified
-my $check = 0;
+# Start in check mode - 0 or false, and pass it to 1 once verified
+my $checked = 0;
 #### END ZONE
+# TBC
+#my $spreadsheet = "1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME1nF3lhXj9U7IrVdu_fEwB7nKTq057D2iFPDA9_q5kbME";
 
 #Avoids warnings
 {
@@ -121,8 +121,8 @@ my $worksheet;
 my $salles;
 my %fields;
 my $calendar_id;
-my $calendar_only_id;
-#my $calendar_name;
+my $calendar_only_id = undef;
+# my $calendar_name; DO NOT USE SUCH a mean to variabilize calendar name it doesn't work
 
 #
 # This GOOGLE API works for calendar !
@@ -137,7 +137,9 @@ $gapi->refresh_access_token_silent($user); # inherits from API::Google
 
 # Detect SSC type : ICE or Perso
 foreach my $t (@tables) {
-	if ($t->get_name =~ /Spectacles/) {
+	my $tn = $t->get_name;
+	print "Working on table $tn\n";
+	if ($tn =~ /Spectacles/) {
 		# Perso
 		$scctype = "Perso";
 		$worksheet = $t->get_name;
@@ -150,48 +152,73 @@ foreach my $t (@tables) {
 		$fields{'date'} = "H";
 		$fields{'salle'} = "J";
 		$fields{'type'} = "O";
-		# Spectacles Auto
-		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SpectaclesAuto');
-		# TEST
-		#$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
+		if ($checked) {
+			# Spectacles Auto
+			$calendar_id = $gapi->get_calendar_id_by_name($user, 'SpectaclesAuto');
+		} else {
+			# TEST
+			$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
+		}
 		last;
 	} 
-	if ($t->get_name =~ /202.*/)  {
+	if ($tn =~ /^20.*/)  {
 		# ICE
 		$scctype = "ICE";
-		$worksheet = $t->get_name;
+		$worksheet = $tn;
 		$salles = "Relais de Salles";
 		# Map colunms
 		$fields{'spectacle'} = "E";
 		$fields{'detail'} = "F";
-		$fields{'duration'} = "J";
-		$fields{'start'} = "Q";
-		$fields{'date'} = "R";
+		$fields{'duration'} = "I";
+		$fields{'start'} = "P";
+		$fields{'date'} = "Q";
 		$fields{'salle'} = "G";
-		$fields{'dateinsc'} = "S";
+		$fields{'dateinsc'} = "R";
 		$fields{'cat'} = "A";
 		$fields{'style'} = "B";
 		$fields{'options'} = "U";
-		$fields{'url'} = "AE";
-		$fields{'text'} = "AF";
-		$fields{'choix'} = "K";
-		# TEST
-		#$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
-		#$calendar_only_id = $calendar_id;
-		# SCC
-		$calendar_id = $gapi->get_calendar_id_by_name($user, 'SCC');
-		# Coups de Cœur
-		$calendar_only_id = $gapi->get_calendar_id_by_name($user, 'Coups de Cœur');
+		$fields{'url'} = "AD";
+		$fields{'text'} = "AE";
+		$fields{'choix'} = "J";
+		if ($checked) {
+			# SCC - DO NOT TRY TO REPLACE  'SCC' by a variable it doesn't work !
+			$calendar_id = $gapi->get_calendar_id_by_name($user, 'SCC');
+			# Coups de Cœur
+			$calendar_only_id = $gapi->get_calendar_id_by_name($user, 'Coups de Cœur');
+		} else {
+			# TEST
+			$calendar_id = $gapi->get_calendar_id_by_name($user, 'TEST');
+			$calendar_only_id = $calendar_id;
+		}
 		last;
 	}
 }
+my $c = $gapi->get_calendar_name($user, $calendar_id);
 print "Found spreadhseet of type $scctype\n" if (defined $scctype);
 if (defined $calendar_id) {
-	print "Will populate calendar $calendar_id\n";
+	print "Will populate calendar $calendar_id ($c)\n\n";
 } else {
 	print "Use goauth to re-enable Google Calendar connection\n";
 	print "and use the resulting JSON content to modify $jsonf\n";
     exit(-1);
+}
+
+if (not $checked) {
+	# TEST mode cleaning before
+	if ($c ne 'TEST') {
+		print "We're not working on a test calendar exiting...\n";
+		exit(-1);
+	}
+	print "Purging all events from calendar $c ...\n";
+	print "Waiting 5 seconds in case it's not what you want !\n";
+	sleep(5);
+	my $e = $gapi->events_list({calendarId => $calendar_id, user => $user});
+	for my $id (@$e) {
+		#print Dumper($id);
+		print "Deleting event $id->{'summary'}\n";
+		$gapi->delete_event($user, $calendar_id, $id->{'id'});
+	}
+	print "Done deleting events from calendar $c ...\n\n";
 }
 
 # Capture all scc
@@ -199,21 +226,21 @@ print "Analyzing it ...\n" if (defined $scctype);
 my $scc = $odf->get_body->get_table($worksheet);
 
 my $i = 1;
-my $c;
+my $ct;
 my $end = 0;
 my $cell;
 while ($end eq 0) {
 	foreach my $k (keys %fields) {
 		$cell = $scc->get_cell($i, $fields{$k});
 		$end = 1 if ((not defined $cell) and ($k =~ /spectacle/));
-		$c = $cell->get_text();
-		$end = 1 if ((not defined $c) || ($c eq "") and ($k =~ /spectacle/));
+		$ct = $cell->get_text();
+		$end = 1 if ((not defined $ct) || ($ct eq "") and ($k =~ /spectacle/));
 		$cal{$i}->{$k} = $cell->get_text();
 	}
 	# Manages lack of minutes
 	$cal{$i}{'duration'} .= "0" if ((defined $cal{$i}{'duration'}) and ($cal{$i}{'duration'} =~ /h$/));
 	# Skipping Choices 2+ for SCC
-	delete($cal{$i}) if (($scctype eq "ICE") and ($cal{$i}{'choix'} !~ /1/));
+	delete($cal{$i}) if (($scctype eq "ICE") and (defined $cal{$i}) and (defined $cal{$i}{'choix'}) and ($cal{$i}{'choix'} !~ /1/));
 	$i++;
 }
 # The previous one is void delete it
@@ -269,10 +296,10 @@ foreach my $i (sort keys %cal) {
 	$j++;
 	print "Add event #$j $cal{$i}->{spectacle} - $event->{start}{dateTime}\n";
 	#print Dumper($event);
-	$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+	$gapi->add_event($user, $calendar_id, $event);
 	# For SCC we also need reminders for options, sending confirmation, and invoice
 	if ($scctype eq "ICE") {
-		$gapi->add_event($user, $calendar_only_id, $event) if ($check eq 0);
+		$gapi->add_event($user, $calendar_only_id, $event);
 		# First manages options at the planned date
 		$event->{summary} = decode("Guess","Rendu d'options pour $cal{$i}->{spectacle}");
 		$event_start = $dateparser->parse_datetime($cal{$i}->{dateinsc}." 18h00");
@@ -281,7 +308,7 @@ foreach my $i (sort keys %cal) {
 		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
 		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
 		print "Add reminder option event #$j $cal{$i}->{spectacle}\n";
-		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+		$gapi->add_event($user, $calendar_id, $event);
 
 		# Then manages participant communication one week before date
 		$event->{summary} = decode("Guess","Participants pour $cal{$i}->{spectacle}");
@@ -292,7 +319,7 @@ foreach my $i (sort keys %cal) {
 		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
 		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
 		print "Add participant option event #$j $cal{$i}->{spectacle}\n";
-		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+		$gapi->add_event($user, $calendar_id, $event);
 		
 		# Then manages participants invoice one week after
 		$event->{summary} = decode("Guess","Facture participants pour $cal{$i}->{spectacle}");
@@ -303,7 +330,7 @@ foreach my $i (sort keys %cal) {
 		$event_end = $event_start + DateTime::Duration->new( hours => 1 );
 		$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
 		print "Add participant invoice option event #$j $cal{$i}->{spectacle}\n";
-		$gapi->add_event($user, $calendar_id, $event) if ($check eq 0);
+		$gapi->add_event($user, $calendar_id, $event);
 	}
 
 }
