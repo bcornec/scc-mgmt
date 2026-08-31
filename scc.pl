@@ -135,23 +135,28 @@ my $gapi = API::Google::GCal->new({ tokensfile => $jsonf });
 print "Step 1\n";
 $gapi->refresh_access_token_silent($user); # inherits from API::Google
 
-# Detect SSC type : ICE or Perso
+# Detect SSC type : GAMA or Perso
 foreach my $t (@tables) {
 	my $tn = $t->get_name;
 	print "Working on table $tn\n";
+	$fields{'cat'} = "A";
+	$fields{'style'} = "B";
+	$fields{'spectacle'} = "E";
+	$fields{'detail'} = "F";
 	if ($tn =~ /Spectacles/) {
 		# Perso
 		$scctype = "Perso";
 		$worksheet = $t->get_name;
 		$salles = "Salles";
 		# Map colunms
-		$fields{'spectacle'} = "A";
-		$fields{'detail'} = "B";
-		$fields{'duration'} = "C";
-		$fields{'start'} = "G";
-		$fields{'date'} = "H";
+		$fields{'spectacle'} = "E";
+		$fields{'detail'} = "F";
+		$fields{'durationh'} = "K";
+		$fields{'durationm'} = "L";
+		$fields{'start'} = "T";
+		$fields{'date'} = "R";
 		$fields{'salle'} = "J";
-		$fields{'type'} = "O";
+		$fields{'cmt'} = "Z";
 		if ($checked) {
 			# Spectacles Auto
 			$calendar_id = $gapi->get_calendar_id_by_name($user, 'SpectaclesAuto');
@@ -162,20 +167,16 @@ foreach my $t (@tables) {
 		last;
 	} 
 	if ($tn =~ /^20.*/)  {
-		# ICE
-		$scctype = "ICE";
+		# GAMA
+		$scctype = "GAMA";
 		$worksheet = $tn;
 		$salles = "Relais de Salles";
 		# Map colunms
-		$fields{'spectacle'} = "E";
-		$fields{'detail'} = "F";
 		$fields{'duration'} = "I";
 		$fields{'start'} = "P";
 		$fields{'date'} = "Q";
 		$fields{'salle'} = "G";
 		$fields{'dateinsc'} = "R";
-		$fields{'cat'} = "A";
-		$fields{'style'} = "B";
 		$fields{'options'} = "U";
 		$fields{'url'} = "AD";
 		$fields{'text'} = "AE";
@@ -199,7 +200,8 @@ if (defined $calendar_id) {
 	print "Will populate calendar $calendar_id ($c)\n\n";
 } else {
 	print "Use goauth to re-enable Google Calendar connection\n";
-	print "and use the resulting JSON content to modify $jsonf\n";
+	print "and use the resulting JSON content to modify $jsonf (done automatically)\n";
+	print "use chromium-browser to view the web site !\n";
     exit(-1);
 }
 
@@ -240,7 +242,7 @@ while ($end eq 0) {
 	# Manages lack of minutes
 	$cal{$i}{'duration'} .= "0" if ((defined $cal{$i}{'duration'}) and ($cal{$i}{'duration'} =~ /h$/));
 	# Skipping Choices 2+ for SCC
-	delete($cal{$i}) if (($scctype eq "ICE") and (defined $cal{$i}) and (defined $cal{$i}{'choix'}) and ($cal{$i}{'choix'} !~ /1/));
+	delete($cal{$i}) if (($scctype eq "GAMA") and (defined $cal{$i}) and (defined $cal{$i}{'choix'}) and ($cal{$i}{'choix'} !~ /1/));
 	$i++;
 }
 # The previous one is void delete it
@@ -261,18 +263,19 @@ foreach my $i (sort keys %cal) {
 	$event->{description} .= "Détails: $cal{$i}->{text}\n" if (defined $cal{$i}->{text});
 	$event->{description} .= "URL $cal{$i}->{url}\n" if (defined $cal{$i}->{url});
 	$event->{description} .= "Nb options $cal{$i}->{options}\n" if (defined $cal{$i}->{options});
-	$event->{description} .= "Type: $cal{$i}->{type}\n" if (defined $cal{$i}->{type});
+	$event->{description} .= "Note: $cal{$i}->{cmt}\n" if (defined $cal{$i}->{cmt});
 	$event->{description} = decode("Guess", $event->{description});
 	$event->{summary} = decode("Guess","$cal{$i}->{spectacle}");
 	$event->{location} = decode("Guess","$cal{$i}->{salle}");
 	if ($scctype eq "Perso") {
 		$dateparser = DateTime::Format::Strptime->new( 
-			pattern => '%d/%m/%Y %Hh%M',
+			pattern => '%Y-%m-%d %H:%M',
+			#pattern => '%d/%m/%Y %Hh%M',
 			time_zone => $timezone,
 			on_error => 'croak',
 		);
 	}
-	if ($scctype eq "ICE") {
+	if ($scctype eq "GAMA") {
 		$dateparser = DateTime::Format::Strptime->new( 
 			pattern => '%Y-%m-%d %Hh%M',
 			time_zone => $timezone,
@@ -287,8 +290,9 @@ foreach my $i (sort keys %cal) {
 	$event->{start}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_start);
 	$event->{end}{timeZone} = $timezone;
 	$dateparserend = DateTime::Format::Duration->new( 
-			pattern => '%Hh%M',
-		);
+		pattern => '%H:%M',
+	);
+	$cal{$i}->{duration} = "$cal{$i}->{durationh}".":"."$cal{$i}->{durationm}";
 	$duration = $dateparserend->parse_duration($cal{$i}->{duration});
 	$event_end += $duration;
 	$event->{end}{dateTime} = DateTime::Format::RFC3339->format_datetime($event_end);
@@ -298,7 +302,7 @@ foreach my $i (sort keys %cal) {
 	#print Dumper($event);
 	$gapi->add_event($user, $calendar_id, $event);
 	# For SCC we also need reminders for options, sending confirmation, and invoice
-	if ($scctype eq "ICE") {
+	if ($scctype eq "GAMA") {
 		$gapi->add_event($user, $calendar_only_id, $event);
 		# First manages options at the planned date
 		$event->{summary} = decode("Guess","Rendu d'options pour $cal{$i}->{spectacle}");
